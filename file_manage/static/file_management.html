@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Management</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.2/cropper.min.js"></script>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center p-4">
+
+  <!-- Profile Pic Display at Top -->
+  <div class="w-full max-w-2xl bg-white rounded-lg shadow-md p-6 mb-4 flex flex-col items-center">
+    <div class="mb-4 flex flex-col items-center">
+  <img id="currentProfilePic" class="w-32 h-32 object-cover rounded-full mb-2 cursor-pointer" alt="Current Profile Pic" onclick="showProfilePicInput()">
+      <h2 class="text-lg font-semibold">Your Profile Picture</h2>
+    </div>
+  </div>
+
+  <div class="w-full max-w-2xl bg-white rounded-lg shadow-md p-6">
+    <div class="flex justify-between items-center mb-4">
+      <h1 class="text-2xl font-bold">File Management</h1>
+      <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Logout</button>
+    </div>
+
+    <!-- File Upload -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold mb-2">Upload File</h2>
+      <input id="fileInput" type="file" class="w-full p-2 border rounded mb-2">
+      <button onclick="uploadFile()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Upload File</button>
+    </div>
+
+    <!-- File List -->
+    <div class="mb-6">
+      <h2 class="text-xl font-semibold mb-2">File List</h2>
+      <button onclick="listFiles()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 mb-2">Refresh List</button>
+      <div id="fileList" class="space-y-2"></div>
+      <!-- Edit File Modal -->
+      <div id="editFileModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded shadow-lg w-96">
+          <h2 class="text-xl font-semibold mb-4">Edit File</h2>
+          <input id="editFileInput" type="file" class="w-full p-2 border rounded mb-4">
+          <button onclick="submitEditFile()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mr-2">Upload New Version</button>
+          <button onclick="closeEditFileModal()" class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500">Cancel</button>
+        </div>
+      </div>
+
+      <!-- File View/Edit Modal -->
+      <div id="fileViewModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded shadow-lg w-2/3 max-w-2xl">
+          <h2 class="text-xl font-semibold mb-4">View/Edit File</h2>
+          <div id="fileContentContainer">
+            <textarea id="fileContent" class="w-full h-64 p-2 border rounded mb-4" style="display:none;"></textarea>
+            <pre id="fileContentPreview" class="w-full h-64 p-2 border rounded mb-4 bg-gray-100 overflow-auto"></pre>
+          </div>
+          <button id="saveFileButton" onclick="saveFileContent()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 mr-2" style="display:none;">Save</button>
+          <button onclick="closeFileModal()" class="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Profile Pic Update -->
+    <div>
+      <h2 class="text-xl font-semibold mb-2">Update Profile Picture</h2>
+      <input id="profilePicInput" type="file" accept="image/png, image/jpeg, image/jpg" class="w-full p-2 border rounded mb-2">
+      <div id="previewContainer" class="mb-2 hidden">
+        <img id="previewImage" class="max-w-full">
+      </div>
+      <button id="cropButton" onclick="cropImage()" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600 hidden">Crop and Upload</button>
+    </div>
+  </div>
+
+  <script>
+    let cropper;
+
+    function logout() {
+      fetch('/users/logout').then(() => window.location.href = '/users/login');
+    }
+
+    function loadProfilePic() {
+      const img = document.getElementById('currentProfilePic');
+      img.src = `/files/get_profile_pic?t=${new Date().getTime()}`;
+      img.onerror = () => { img.src = ''; img.alt = 'No profile pic'; };
+    }
+
+    async function uploadFile() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+      if (!file) return alert('No file selected');
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await fetch('/files/upload_file', { method: 'POST', body: formData });
+      if (response.ok) {
+        alert('File uploaded');
+        fileInput.value = '';
+        listFiles();
+      } else {
+        alert('Error uploading file');
+      }
+    }
+
+    async function listFiles() {
+      try {
+        const response = await fetch('/files/list_files');
+        if (!response.ok) throw new Error('Failed to fetch file list');
+        const files = await response.json();
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = '';
+        if (files.length === 0) {
+          fileList.innerHTML = '<div class="text-gray-500">No files found.</div>';
+        } else {
+          files.forEach(filename => {
+            const fileDiv = document.createElement('div');
+            fileDiv.className = 'flex items-center justify-between bg-gray-50 p-2 rounded shadow';
+            const textExtensions = ['txt', 'csv', 'json'];
+            const ext = filename.split('.').pop().toLowerCase();
+            let buttons = `
+                <button onclick="downloadFile('${filename}')" class="bg-blue-500 text-white px-2 py-1 rounded mr-2">Download</button>
+                <button onclick="deleteFile('${filename}')" class="bg-red-500 text-white px-2 py-1 rounded mr-2">Delete</button>
+            `;
+            if (textExtensions.includes(ext)) {
+              buttons += `
+                <button onclick="openFileModal('${filename}')" class="bg-green-500 text-white px-2 py-1 rounded mr-2">Open</button>
+                <button onclick="openEditFileModal('${filename}')" class="bg-yellow-500 text-white px-2 py-1 rounded">Edit</button>
+              `;
+            }
+            fileDiv.innerHTML = `
+              <span>${filename}</span>
+              <div>${buttons}</div>
+            `;
+            fileList.appendChild(fileDiv);
+          });
+        }
+      } catch (err) {
+        const fileList = document.getElementById('fileList');
+        fileList.innerHTML = `<div class="text-red-500">Error: ${err.message}</div>`;
+      }
+    }
+
+    function downloadFile(filename) {
+      window.location.href = `/files/download_file/${encodeURIComponent(filename)}`;
+    }
+
+    async function deleteFile(filename) {
+      if (confirm(`Delete ${filename}?`)) {
+        await fetch(`/files/delete_file/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+        listFiles();
+      }
+    }
+
+    document.getElementById('profilePicInput').addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const previewImage = document.getElementById('previewImage');
+          previewImage.src = e.target.result;
+          document.getElementById('previewContainer').classList.remove('hidden');
+          document.getElementById('cropButton').classList.remove('hidden');
+          if (cropper) cropper.destroy();
+          cropper = new Cropper(previewImage, {
+            aspectRatio: 1,
+            viewMode: 1,
+          });
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    async function cropImage() {
+      if (!cropper) return;
+      const canvas = cropper.getCroppedCanvas({
+        width: 200,
+        height: 200,
+      });
+      canvas.toBlob(async (blob) => {
+        const formData = new FormData();
+        formData.append('file', blob, 'profile.jpg');
+        const response = await fetch('/files/update_profile_pic', { method: 'POST', body: formData });
+        if (response.ok) {
+          alert('Profile pic updated');
+          document.getElementById('previewContainer').classList.add('hidden');
+          document.getElementById('cropButton').classList.add('hidden');
+          document.getElementById('profilePicInput').value = '';
+          document.getElementById('profilePicInput').classList.add('hidden');
+          if (cropper) cropper.destroy();
+          loadProfilePic();
+        } else {
+          alert('Error updating profile pic');
+        }
+      });
+    }
+
+    let fileViewing = null;
+
+    function openFileModal(filename) {
+      fileViewing = filename;
+      document.getElementById('fileViewModal').classList.remove('hidden');
+      // Use the 'any' route for project files
+      fetch(`/files/get_file_content_any/${encodeURIComponent(filename)}`)
+        .then(res => {
+          if (!res.ok) throw new Error('Could not open file.');
+          return res.json();
+        })
+        .then(data => {
+          const isText = data.is_text;
+          const content = data.content;
+          document.getElementById('fileContent').style.display = isText ? '' : 'none';
+          document.getElementById('fileContentPreview').style.display = isText ? 'none' : '';
+          document.getElementById('saveFileButton').style.display = isText ? '' : 'none';
+          if (isText) {
+            document.getElementById('fileContent').value = content;
+          } else {
+            document.getElementById('fileContentPreview').textContent = content;
+          }
+        })
+        .catch(err => {
+          document.getElementById('fileContent').style.display = 'none';
+          document.getElementById('fileContentPreview').style.display = '';
+          document.getElementById('saveFileButton').style.display = 'none';
+          document.getElementById('fileContentPreview').textContent = 'Error: ' + err.message;
+        });
+    }
+
+    function closeFileModal() {
+      fileViewing = null;
+      document.getElementById('fileViewModal').classList.add('hidden');
+      document.getElementById('fileContent').value = '';
+      document.getElementById('fileContentPreview').textContent = '';
+    }
+
+    function saveFileContent() {
+  const newContent = document.getElementById('fileContent').value;
+  // Use the 'any' route for project files
+  fetch(`/files/save_file_content_any/${encodeURIComponent(fileViewing)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ content: newContent })
+  }).then(res => {
+    if (res.ok) {
+      alert('File saved');
+      closeFileModal();
+      listFiles();
+    } else {
+      res.json().then(data => {
+        alert('Error saving file: ' + (data.error || 'Unknown error'));
+      }).catch(() => {
+        alert('Error saving file');
+      });
+    }
+  }).catch(err => {
+    alert('Network error: ' + err.message);
+  });
+}
+
+    loadProfilePic();
+    listFiles();
+  </script>
+</body>
+</html>

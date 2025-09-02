@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+  <div class="w-full max-w-md bg-white rounded-lg shadow-md p-6">
+    <h1 class="text-2xl font-bold mb-4 text-center">Login</h1>
+    <div class="mb-4">
+      <label for="username" class="block text-sm font-medium text-gray-700">Username</label>
+      <input id="username" type="text" class="w-full p-2 border rounded">
+    </div>
+    <div class="mb-4">
+      <label for="password" class="block text-sm font-medium text-gray-700">Password</label>
+      <input id="password" type="password" class="w-full p-2 border rounded">
+    </div>
+    <button onclick="login()" class="w-full bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Login</button>
+    <p class="mt-4 text-center">Don't have an account? <a href="#" onclick="createUser()" class="text-blue-500 hover:underline">Create one</a></p>
+  </div>
+
+  <script>
+    async function login() {
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+      if (!username || !password) {
+        alert('Please enter username and password');
+        return;
+      }
+      const response = await fetch('/users/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      if (response.ok) {
+        window.location.href = '/files/';
+      } else {
+        alert('Invalid credentials');
+      }
+    }
+
+    async function createUser() {
+      const username = prompt('Enter username:');
+      const password = prompt('Enter password:');
+      const email = prompt('Enter email (optional):');
+      if (username && password) {
+        const response = await fetch('/users/create_user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password, email })
+        });
+        if (response.ok) {
+          alert('User created. Please login.');
+        } else {
+          alert('Error creating user');
+        }
+      }
+    }
+  </script>
+</body>
+</html>
