@@ -1,1 +1,2 @@
 # File_management
+This is a Flask-based web application for user authentication and file management. Users can register, log in, log out, manage their profile, and perform file operations (upload, list, download, delete) with profile picture updates (PNG/JPEG/JPG, max 2MB, with cropping). The application uses Flask-Login for session management, blueprints for modular code, and optionally Flask-SQLAlchemy for persistent user storage with SQLite.
